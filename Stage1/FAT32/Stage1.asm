@@ -180,12 +180,13 @@ LoadFile:
 		call 	ReadCluster
 
 		; Check
-		xchg 	bx, bx
 		cmp 	esi, 0x0FFFFFF8
 		jb 		.cLoop
 
 	; Done, jump
-	;jmp 	0x0:0x0500
+	mov 	dl, byte [bPhysicalDriveNum]
+	mov 	dh, 4
+	jmp 	0x0:0x500
 
 	; Safety catch
 	cli
@@ -205,39 +206,39 @@ ReadCluster:
 	pusha
 
 	; Save Bx
-	push bx
+	push 	bx
 
 	; Calculate Sector
-	xor eax, eax
-	xor bx, bx
-	mov ax, si
-	sub ax, 2
-	mov bl, byte [bSectorsPerCluster]
-	mul bx
-	add eax, dword [dReserved0]
+	xor 	eax, eax
+	xor 	bx, bx
+	mov 	ax, si
+	sub 	ax, 2 
+	mov 	bl, byte [bSectorsPerCluster]
+	mul 	bx
+	add 	eax, dword [dReserved0]
 
 	; Eax is now the sector of data
-	pop bx
-	mov cl, byte [bSectorsPerCluster]
+	pop 	bx
+	mov 	cl, byte [bSectorsPerCluster]
 
 	; Read
-	call ReadSector
+	call 	ReadSector
 
 	; Save position
-	mov word [dReserved2], bx
-	push es
+	mov 	word [dReserved2], bx
+	push 	es
 
 	; Si still has cluster num, call next
-	call GetNextCluster
-	mov dword [dReserved1], esi
+	call 	GetNextCluster
+	mov 	dword [dReserved1], esi
 
 	; Restore
-	pop es
+	pop 	es
 
 	; Done
 	popa
-	mov bx, word [dReserved2]
-	mov esi, dword [dReserved1]
+	mov 	bx, word [dReserved2]
+	mov 	esi, dword [dReserved1]
 	ret
 
 
@@ -255,46 +256,46 @@ ReadSector:
 	pusha
 
 	; Set initial 
-	mov word [DiskPackage.Segment], es
-	mov word [DiskPackage.Offset], bx
-	mov word [DiskPackage.Sector], ax
+	mov 	word [DiskPackage.Segment], es
+	mov 	word [DiskPackage.Offset], bx
+	mov 	word [DiskPackage.Sector], ax
 
 	.sLoop:
 		; Setup Package
-		mov word [DiskPackage.SectorsToRead], 1
+		mov 	word [DiskPackage.SectorsToRead], 1
 
 		; Setup INT
-		mov al, 0
-		mov ah, 0x42
-		mov dl, byte [bPhysicalDriveNum]
-		mov si, DiskPackage
-		int 0x13
+		mov 	al, 0
+		mov 	ah, 0x42
+		mov 	dl, byte [bPhysicalDriveNum]
+		mov 	si, DiskPackage
+		int 	0x13
 
 		; It's important we check for offset overflow
-		mov ax, word [wBytesPerSector]
-		add word [DiskPackage.Offset], ax 
-		jno .NoOverflow
+		mov 	ax, word [wBytesPerSector]
+		add 	word [DiskPackage.Offset], ax 
+		jno 	.NoOverflow
 
 	.Overflow:
 		; So overflow happened
-		add word [DiskPackage.Segment], 0x1000
-		mov word [DiskPackage.Offset], 0x0000
+		add 	word [DiskPackage.Segment], 0x1000
+		mov 	word [DiskPackage.Offset], 0x0000
 
 	.NoOverflow:
 		; Loop
-		inc dword [DiskPackage.Sector]
-		loop .sLoop
+		inc 	dword [DiskPackage.Sector]
+		loop 	.sLoop
 
 	.End:
 	; Restore registers 
 	popa
 
 	; Save position
-	push ax
-	mov ax, word [DiskPackage.Segment]
-	mov es, ax
-	mov bx, word [DiskPackage.Offset]
-	pop ax
+	push 	ax
+	mov 	ax, word [DiskPackage.Segment]
+	mov 	es, ax
+	mov 	bx, word [DiskPackage.Offset]
+	pop 	ax
 	ret
 
 ; **************************
@@ -310,31 +311,31 @@ ReadSector:
 ; **************************
 GetNextCluster:
 	; Calculte Sector in FAT
-	xor eax, eax
-	mov ax, si
-	div word [wBytesPerSector]
-	add ax, word [wReservedSectors]
-	push dx
+	xor 	eax, eax
+	mov 	ax, si
+	div 	word [wBytesPerSector]
+	add 	ax, word [wReservedSectors]
+	push 	dx
 
 	; AX contains sector
 	; DX contains remainder
-	mov ecx, 1
-	mov bx, 0x0000
-	mov es, bx
-	mov bx, 0x7E00
-	push es
-	push bx
+	mov 	ecx, 1
+	mov 	bx, 0x0000
+	mov 	es, bx
+	mov 	bx, 0x7E00
+	push 	es
+	push 	bx
 
 	; Read Sector
-	call ReadSector
-	pop bx
-	pop es
+	call 	ReadSector
+	pop 	bx
+	pop 	es
 
 	; Find Entry
-	pop dx
-	shl dx, 2 			; REM * 4, since entries are 32 bits long, and not 8
-	xchg si, dx
-	mov esi, dword [es:bx + si]
+	pop 	dx
+	shl 	dx, 2 			; REM * 4, since entries are 32 bits long, and not 8
+	xchg 	si, dx
+	mov 	esi, dword [es:bx + si]
 	ret
 
 
