@@ -29,16 +29,16 @@ jmp Entry
 %define 		MEMLOCATION_FAT_GETCLUSTER		0x7E00
 %define 		MEMLOCATION_FAT_FATTABLE		0x8000
 %define 		MEMLOCATION_MEMORY_MAP			0x9000
-%define 		MEMLOCATION_VESA_INFO			0xA000
+%define 		MEMLOCATION_VESA_INFO_BASE		0xA000
 %define 		MEMLOCATION_KERNEL				0xB000
 %define 		MEMLOCATION_KERNEL_UPPER		0x100000
-
 
 ; Includes
 %include "Systems/Common.inc"
 %include "Systems/Memory.inc"
 %include "Systems/A20.inc"
 %include "Systems/Gdt.inc"
+%include "Systems/Vesa.inc"
 
 ; FileSystem Includes
 %include "Systems/FsCommon.inc"
@@ -103,6 +103,10 @@ Entry:
 	mov 	esi, szWelcome3
 	call 	Print
 
+	; Set basic
+	mov 	esi, szBootloaderName
+	mov 	dword [BootHeader + MultiBoot.BootLoaderName], esi
+
 	; Get memory map
 	call 	SetupMemory
 
@@ -119,6 +123,12 @@ Entry:
 	call 	SetupFS
 
 	; Load Kernel
+	mov 	esi, szPrefix
+	call 	Print
+
+	mov 	esi, szLoadingKernel
+	call 	Print
+
 	mov 	esi, szKernel
 	xor 	eax, eax
 	xor 	ebx, ebx
@@ -126,11 +136,59 @@ Entry:
 	mov 	bx, MEMLOCATION_KERNEL
 	call 	LoadFile
 
-	; VESA System Select
+	cmp 	eax, 0
+	jne 	Continue
 
+	; Damnit
+	mov 	esi, szFailed
+	call 	Print
+
+	; Fuckup
+	call 	SystemsFail
+
+Continue:
+	; Save
+	mov 	dword [dKernelSize], eax
+
+	; Print
+	mov 	esi, szSuccess
+	call 	Print
+
+	; VESA System Select
+	call 	VesaSetup
+
+	; Print last message 
+	mov 	esi, szPrefix
+	call 	Print
+
+	mov 	esi, szFinishBootMsg
+	call 	Print
+
+	; Switch Video Mode
+	;call 	VesaFinish
 
 	; GO PROTECTED MODE!
+	mov		eax, cr0
+	or		eax, 1
+	mov		cr0, eax
 
+	; Jump into 32 bit
+	jmp 	CODE_DESC:Entry32
+
+
+; ****************************
+; 32 Bit Stage Below 
+; ****************************
+BITS 32
+
+Entry32:
+	; Setup Segments, Stack etc
+	xor 	eax, eax
+	mov 	ax, DATA_DESC
+	mov 	ds, ax
+	mov 	ss, ax
+	mov 	es, ax
+	mov 	esp, 0x7BFF
 
 	; Kernel Relocation to 1mb (PE, ELF, binary)
 
@@ -151,6 +209,7 @@ Entry:
 ; ****************************
 
 ; Strings - 0x0D (LineFeed), 0x0A (Carriage Return)
+szBootloaderName				db 		"mBoot Version 1.0.0 - Author: Philip Meulengracht", 0x00
 szWelcome0 						db 		"                ***********************************************", 0x0D, 0x0A, 0x00
 szWelcome1						db 		"                * MollenOS Stage 2 Bootloader (Version 1.0.0) *", 0x0D, 0x0A, 0x00
 szWelcome2						db 		"                * Author: Philip Meulengracht                 *", 0x0D, 0x0A, 0x00
@@ -158,11 +217,14 @@ szWelcome3 						db 		"                *****************************************
 szPrefix 						db 		"                   - ", 0x00
 szSuccess						db 		" [OK]", 0x0D, 0x0A, 0x00
 szFailed						db 		" [FAIL]", 0x0D, 0x0A, 0x00
+szLoadingKernel					db 		"Loading Kernel", 0x00
+szFinishBootMsg 				db 		"Finishing Boot Sequence", 0x0D, 0x0A, 0x00
 
 szKernel						db 		"KRNL32  MOS"
 
 ; Practical stuff
 bDriveNumber 					db 		0
+dKernelSize						dd 		0
 
 ; 2 -> FAT12, 3 -> FAT16, 4 -> FAT32
 bStage1Type						db 		0

@@ -155,51 +155,66 @@ Print:
 		popad
 		ret
 
+; ********************************
+; PrintNumber
+; IN:
+; 	- EAX: NumberToPrint
+; ********************************
+PrintNumber:
+	; Save state
+	pushad
 
-/*
-* Shows a 16-bit word to console. Need word to dump in% dx.
-*/
-HexTable:      .ascii "0123456789ABCDEF"
-show_16bit_word:
-   pushw %bx
-   pushw %ax
-   movw $HexTable, %bx
-   movw %dx, %ax
-   /* Do higher 4 bits from higher byte */
-   andb $0xf0, %ah
-   shr $0x4, %ah
-   xchg %ah, %al
-   xlat
-   call dochar
-   movw %dx, %ax
-   /* Do lower 4 bits from higher byte */
-   andb $0xf, %ah
-   xchg %ah, %al
-   xlat
-   call dochar
-   movw %dx, %ax
-   /* Do higher 4 bits from lower byte */
-   andb $0xf0, %al
-   shr $0x4, %al
-   xlat
-   call dochar
-   movw %dx, %ax
-   /* Do lower 4 bits from lower byte */
-   andb $0xf, %al
-   xlat
-   call dochar
-   popw %ax
-   popw %bx
-   ret
+	; Loops
+	xor 	ebx, ebx
+    mov 	ecx, 10
+
+	.DigitLoop:
+	    xor 	edx, edx
+	    div 	ecx
+
+	    ; now eax <-- eax/10
+	    ;     edx <-- eax % 10
+
+	    ; print edx
+	    ; this is one digit, which we have to convert to ASCII
+	    ; the print routine uses edx and eax, so let's push eax
+	    ; onto the stack. we clear edx at the beginning of the
+	    ; loop anyway, so we don't care if we much around with it
+
+	    ; convert dl to ascii
+	    add 	edx, 48
+
+	    ; Store it
+	    push 	edx
+	    inc 	ebx
+
+	    ; if eax is zero, we can quit
+	    cmp eax, 0
+	    jnz .DigitLoop
+
+	.PrintLoop:
+		pop 	eax
+
+		; Print it
+		call 	PrintChar
+
+		; Decrease
+		dec 	ebx
+		jnz 	.PrintLoop
+
+    ; Done
+    popad
+    ret
 
 ; ********************************
 ; SystemsFail
 ; Only call if fatal error
 ; ********************************
 SystemsFail:
+	int     0x16                    ; await keypress
+	int     0x19                    ; warm boot computer
+
 	; No return from this
-
-
 	cli
 	hlt
 

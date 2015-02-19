@@ -69,6 +69,7 @@ GetNextCluster:
 	; Calculte Sector in FAT
 	xor 	eax, eax
 	xor 	ebx, ebx
+	xor 	edx, edx ; Zero out edx before division!!
 	mov 	eax, esi
 	mov 	bx, word [FatBootSector + FatBootSectorStruct.BytesPerSector]
 	div 	ebx
@@ -116,7 +117,7 @@ GetNextCluster:
 ;	- ESI NextClusterInChain
 ; **************************
 ReadCluster:
-	pusha
+	pushad
 
 	; Save Bx
 	push 	bx
@@ -154,7 +155,7 @@ ReadCluster:
 	pop 	es
 
 	; Done
-	popa
+	popad
 	mov 	bx, word [wFATTemporary0]
 	mov 	esi, dword [dFATTemporary1]
 	ret
@@ -206,7 +207,7 @@ FatLoadFile:
 		; End of root?
 		.EntryLoop:
 			cmp 	[es:di], ch
-			je 		.NotFound
+			je 		.ExitLoop
 
 			; No, phew, lets check if filename matches
 			pushad
@@ -252,6 +253,10 @@ FatLoadFile:
 		pop 	esi
 		cmp 	esi, 0x0FFFFFF8
 		jb 		.cLoop
+		jmp 	.NotFound
+
+	.ExitLoop:
+		pop 	esi
 		jmp 	.NotFound
 
 	.Success:
