@@ -53,8 +53,11 @@ ReadSector:
 
 		; It's important we check for offset overflow
 		pop 	edx
-		add 	word [DiskPackage.Offset], dx
-		jno 	.NoOverflow
+		mov 	ax, word [DiskPackage.Offset]
+		add 	ax, dx
+		mov 	word [DiskPackage.Offset], ax
+		test 	ax, ax
+		jne 	.NoOverflow
 
 	.Overflow:
 		; So overflow happened

@@ -71,6 +71,7 @@ GetNextCluster:
 	xor 	ebx, ebx
 	xor 	edx, edx ; Zero out edx before division!!
 	mov 	eax, esi
+	shl 	eax, 2 	 ; REM * 4, since entries are 32 bits long, and not 8
 	mov 	bx, word [FatBootSector + FatBootSectorStruct.BytesPerSector]
 	div 	ebx
 	mov 	bx, word [FatBootSector + FatBootSectorStruct.ReservedSecCount]
@@ -95,7 +96,6 @@ GetNextCluster:
 
 	; Find Entry
 	pop 	edx
-	shl 	edx, 2 			; REM * 4, since entries are 32 bits long, and not 8
 	xchg 	esi, edx
 	mov 	esi, dword [es:bx + si]
 
@@ -241,6 +241,7 @@ FatLoadFile:
 
 
         	; We are done, end this
+        	pop 	eax 		; Fix stack
         	jmp 	.Success
 
         	; Next entry

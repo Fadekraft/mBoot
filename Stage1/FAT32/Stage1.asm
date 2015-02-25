@@ -272,9 +272,12 @@ ReadSector:
 		int 	0x13
 
 		; It's important we check for offset overflow
-		mov 	ax, word [wBytesPerSector]
-		add 	word [DiskPackage.Offset], ax 
-		jno 	.NoOverflow
+		mov 	dx, word [wBytesPerSector]
+		mov 	ax, word [DiskPackage.Offset]
+		add 	ax, dx
+		mov 	word [DiskPackage.Offset], ax
+		test 	ax, ax
+		jne 	.NoOverflow
 
 	.Overflow:
 		; So overflow happened
@@ -312,7 +315,9 @@ ReadSector:
 GetNextCluster:
 	; Calculte Sector in FAT
 	xor 	eax, eax
+	xor 	edx, edx
 	mov 	ax, si
+	shl 	ax, 2 			; REM * 4, since entries are 32 bits long, and not 8
 	div 	word [wBytesPerSector]
 	add 	ax, word [wReservedSectors]
 	push 	dx
@@ -333,7 +338,6 @@ GetNextCluster:
 
 	; Find Entry
 	pop 	dx
-	shl 	dx, 2 			; REM * 4, since entries are 32 bits long, and not 8
 	xchg 	si, dx
 	mov 	esi, dword [es:bx + si]
 	ret

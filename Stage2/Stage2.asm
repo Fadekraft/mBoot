@@ -39,6 +39,7 @@ jmp Entry
 %include "Systems/A20.inc"
 %include "Systems/Gdt.inc"
 %include "Systems/Vesa.inc"
+%include "Systems/PELoader.inc"
 
 ; FileSystem Includes
 %include "Systems/FsCommon.inc"
@@ -116,6 +117,9 @@ Entry:
 	; Install GDT
 	call 	InstallGdt
 
+	; VESA System Select
+	call 	VesaSetup
+
 	; Setup FileSystem (Based on Stage1 Type)
 	xor 	eax, eax
 	mov 	al, byte [bStage1Type]
@@ -154,9 +158,6 @@ Continue:
 	mov 	esi, szSuccess
 	call 	Print
 
-	; VESA System Select
-	call 	VesaSetup
-
 	; Print last message 
 	mov 	esi, szPrefix
 	call 	Print
@@ -186,19 +187,19 @@ Entry32:
 	xor 	eax, eax
 	mov 	ax, DATA_DESC
 	mov 	ds, ax
+	mov 	fs, ax
+	mov 	gs, ax
 	mov 	ss, ax
 	mov 	es, ax
 	mov 	esp, 0x7BFF
 
 	; Kernel Relocation to 1mb (PE, ELF, binary)
+	mov 	esi, MEMLOCATION_KERNEL
+	mov 	edi, MEMLOCATION_KERNEL_UPPER
+	call 	PELoad
 
-
-	; Parse kernel type (PE, ELF, binary)
-	; and get entrypoint
-
-
-	; Jump to kernel 
-
+	; Jump to kernel (Entry Point in EBX)
+	xchg 	bx, bx
 
 	; Safety
 	cli
@@ -217,10 +218,10 @@ szWelcome3 						db 		"                *****************************************
 szPrefix 						db 		"                   - ", 0x00
 szSuccess						db 		" [OK]", 0x0D, 0x0A, 0x00
 szFailed						db 		" [FAIL]", 0x0D, 0x0A, 0x00
-szLoadingKernel					db 		"Loading Kernel", 0x00
+szLoadingKernel					db 		"Loading MollenOS Kernel", 0x00
 szFinishBootMsg 				db 		"Finishing Boot Sequence", 0x0D, 0x0A, 0x00
 
-szKernel						db 		"KRNL32  MOS"
+szKernel						db 		"MCORE   MOS"
 
 ; Practical stuff
 bDriveNumber 					db 		0
