@@ -30,7 +30,9 @@ jmp Entry
 %define 		MEMLOCATION_FAT_FATTABLE		0x8000
 %define 		MEMLOCATION_MEMORY_MAP			0x9000
 %define 		MEMLOCATION_VESA_INFO_BASE		0xA000
-%define 		MEMLOCATION_KERNEL				0xB000
+%define 		MEMLOCATION_KERNEL_SEGMENT		0x0000
+%define 		MEMLOCATION_KERNEL_OFFSET		0xB000
+%define 		MEMLOCATION_KERNEL_LOWER		0xB000 
 %define 		MEMLOCATION_KERNEL_UPPER		0x100000
 
 ; Includes
@@ -136,8 +138,9 @@ Entry:
 	mov 	esi, szKernel
 	xor 	eax, eax
 	xor 	ebx, ebx
+	mov 	ax, MEMLOCATION_KERNEL_SEGMENT
 	mov 	es, ax
-	mov 	bx, MEMLOCATION_KERNEL
+	mov 	bx, MEMLOCATION_KERNEL_OFFSET
 	call 	LoadFile
 
 	cmp 	eax, 0
@@ -166,7 +169,7 @@ Continue:
 	call 	Print
 
 	; Switch Video Mode
-	;call 	VesaFinish
+	call 	VesaFinish
 
 	; GO PROTECTED MODE!
 	mov		eax, cr0
@@ -177,6 +180,7 @@ Continue:
 	jmp 	CODE_DESC:Entry32
 
 
+align 32
 ; ****************************
 ; 32 Bit Stage Below 
 ; ****************************
@@ -193,13 +197,32 @@ Entry32:
 	mov 	es, ax
 	mov 	esp, 0x7BFF
 
+	; Disable ALL irq (This is more correct than CLI)
+	mov 	al, 0xff
+	out 	0xa1, al
+	out 	0x21, al
+
+	; But we cli aswell haha
+	cli
+
 	; Kernel Relocation to 1mb (PE, ELF, binary)
-	mov 	esi, MEMLOCATION_KERNEL
+	mov 	esi, MEMLOCATION_KERNEL_LOWER
 	mov 	edi, MEMLOCATION_KERNEL_UPPER
 	call 	PELoad
 
-	; Jump to kernel (Entry Point in EBX)
-	xchg 	bx, bx
+	; Setup Registers
+	xor 	esi, esi
+	xor 	edi, edi
+	mov 	ecx, ebx
+	mov 	eax, MULTIBOOT_MAGIC
+	mov 	ebx, BootHeader
+	mov 	edx, dword [dKernelSize]
+
+	; MultiBoot structure also needs to be on stack
+	push 	ebx
+
+	; Jump to kernel (Entry Point in ECX)
+	jmp 	ecx
 
 	; Safety
 	cli

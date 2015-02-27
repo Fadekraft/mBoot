@@ -50,7 +50,7 @@ BITS 16
 %define 		MB_INFO_VIDEO_INFO		0x800
 
 ; R/EAX must contain this
-%define 		MULTIBOOT_MAGIC			0x2BADBOO2
+%define 		MULTIBOOT_MAGIC			0x2BADB002
 
 ; Structure Definitions
 struc MultiBoot
@@ -227,6 +227,7 @@ bTextColor							db 		0x0F
 ; ********************************
 ; MultiBoot Header
 ; ********************************
+align 32
 BootHeader:
 istruc MultiBoot
 	at MultiBoot.Flags,				dd 0

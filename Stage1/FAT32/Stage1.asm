@@ -19,7 +19,7 @@
 
 ; 16 Bit Code, Origin at 0x0
 BITS 16
-ORG 0x0000
+ORG 0x7C00
 
 
 ; Jump Code, 3 Bytes
@@ -71,22 +71,21 @@ szFSName					db		"FAT32   "
 ; *************************
 
 Main:
-	jmp 	0x07C0:FixCS
+	jmp 	0x0:FixCS
 
 FixCS:
 	; Disable Interrupts, we are modifying
 	; important registers
 	cli
 
-	; Fix segment registers to 0x7C00
-	mov		ax, 0x07C0
+	; Fix segment registers to 0
+	xor 	ax, ax
 	mov		ds, ax
 	mov		es, ax
 	mov		fs, ax
 	mov		gs, ax
 
 	; Set stack
-	mov		ax, 0x0000
 	mov		ss, ax
 	mov		ax, 0x7BFF
 	mov		sp, ax
