@@ -233,7 +233,7 @@ Entry32:
 ; ****************************
 
 ; Strings - 0x0D (LineFeed), 0x0A (Carriage Return)
-szBootloaderName				db 		"mBoot Version 1.0.0 - Author: Philip Meulengracht", 0x00
+szBootloaderName				db 		"mBoot Version 1.0.0, Author: Philip Meulengracht", 0x00
 szWelcome0 						db 		"                ***********************************************", 0x0D, 0x0A, 0x00
 szWelcome1						db 		"                * MollenOS Stage 2 Bootloader (Version 1.0.0) *", 0x0D, 0x0A, 0x00
 szWelcome2						db 		"                * Author: Philip Meulengracht                 *", 0x0D, 0x0A, 0x00

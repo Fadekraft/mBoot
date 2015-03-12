@@ -71,23 +71,21 @@ szFSName					db		"FAT32   "
 ; *************************
 
 Main:
+	; Disable Interrupts, unsafe passage
+	cli
+
+	; Far jump to fix segment registers
 	jmp 	0x0:FixCS
 
 FixCS:
-	; Disable Interrupts, we are modifying
-	; important registers
-	cli
-
 	; Fix segment registers to 0
 	xor 	ax, ax
 	mov		ds, ax
 	mov		es, ax
-	mov		fs, ax
-	mov		gs, ax
 
 	; Set stack
 	mov		ss, ax
-	mov		ax, 0x7BFF
+	mov		ax, 0x7C00
 	mov		sp, ax
 
 	; Done, now we need interrupts again
@@ -132,6 +130,7 @@ FixCS:
 			je 		.cEnd
 
 			; No, phew, lets check if filename matches
+			cld
 			pusha
         	repe    cmpsb
         	popa
@@ -158,6 +157,8 @@ FixCS:
 
 	; Ehh if we reach here, not found :s
 	.cEnd:
+	mov 	eax, 1
+	call 	PrintNumber
 	cli
 	hlt
 
@@ -169,8 +170,8 @@ FixCS:
 LoadFile:
 	; Lets load the fuck out of this file
 	; Step 1. Setup buffer
-	push 	0x0000
-	pop 	es
+	mov 	bx, 0x0000
+	mov 	es, bx
 	mov 	bx, 0x0500
 
 	; Load 
@@ -208,10 +209,12 @@ ReadCluster:
 	push 	bx
 
 	; Calculate Sector
+	; FirstSectorofCluster = ((N – 2) * BPB_SecPerClus) + FirstDataSector;
 	xor 	eax, eax
 	xor 	bx, bx
+	xor 	ecx, ecx
 	mov 	ax, si
-	sub 	ax, 2 
+	sub 	ax, 2
 	mov 	bl, byte [bSectorsPerCluster]
 	mul 	bx
 	add 	eax, dword [dReserved0]
@@ -240,64 +243,76 @@ ReadCluster:
 	mov 	esi, dword [dReserved1]
 	ret
 
-
 ; **************************
 ; BIOS ReadSector 
 ; IN:
 ; 	- ES:BX: Buffer
 ;	- AX: Sector start
-; 	- CL: Sector count
+; 	- CX: Sector count
 ;
 ; Registers:
 ; 	- Conserves all but ES:BX
 ; **************************
 ReadSector:
-	pusha
-
-	; Set initial 
-	mov 	word [DiskPackage.Segment], es
-	mov 	word [DiskPackage.Offset], bx
-	mov 	word [DiskPackage.Sector], ax
+	; Error Counter
+	.Start:
+		mov 	di, 5
 
 	.sLoop:
-		; Setup Package
-		mov 	word [DiskPackage.SectorsToRead], 1
+		; Save states
+		push 	ax
+		push 	bx
+		push 	cx
 
-		; Setup INT
-		mov 	al, 0
-		mov 	ah, 0x42
+		; Convert LBA to CHS
+		xor     dx, dx
+        div     WORD [wSectorsPerTrack]
+        inc     dl ; adjust for sector 0
+        mov     cl, dl ;Absolute Sector
+        xor     dx, dx
+        div     WORD [wHeadsPerCylinder]
+        mov     dh, dl ;Absolute Head
+        mov     ch, al ;Absolute Track
+
+        ; Bios Disk Read -> 01 sector
+		mov 	ax, 0x0201
 		mov 	dl, byte [bPhysicalDriveNum]
-		mov 	si, DiskPackage
 		int 	0x13
+		jnc 	.Success
 
-		; It's important we check for offset overflow
-		mov 	dx, word [wBytesPerSector]
-		mov 	ax, word [DiskPackage.Offset]
-		add 	ax, dx
-		mov 	word [DiskPackage.Offset], ax
-		test 	ax, ax
-		jne 	.NoOverflow
+	.Fail:
+		; HAHA fuck you
+		xor 	ax, ax
+		int 	0x13
+		dec 	di
+		pop 	cx
+		pop 	bx
+		pop 	ax
+		jnz 	.sLoop
+		
+		; Give control to next OS, we failed 
+		mov 	eax, 2
+		call 	PrintNumber
+		cli 
+		hlt
 
-	.Overflow:
-		; So overflow happened
-		add 	word [DiskPackage.Segment], 0x1000
-		mov 	word [DiskPackage.Offset], 0x0000
+	.Success:
+		; Next sector
+		pop 	cx
+		pop 	bx
+		pop 	ax
 
-	.NoOverflow:
-		; Loop
-		inc 	dword [DiskPackage.Sector]
-		loop 	.sLoop
+		add 	bx, word [wBytesPerSector]
+		jnc 	.SkipEs
+		mov 	dx, es
+		add 	dh, 0x10
+		mov 	es, dx
 
-	.End:
-	; Restore registers 
-	popa
+	.SkipEs:
+		inc 	ax
+		loop 	.Start
 
-	; Save position
-	push 	ax
-	mov 	ax, word [DiskPackage.Segment]
-	mov 	es, ax
-	mov 	bx, word [DiskPackage.Offset]
-	pop 	ax
+	; Done
 	ret
 
 ; **************************
@@ -309,7 +324,7 @@ ReadSector:
 ;	- ESI NextClusterNum
 ;
 ; Registers:
-; 	- Trashes EAX, BX, ECX, DX, ES
+; 	- Trashes EAX, BX, ECX, EDX, ES
 ; **************************
 GetNextCluster:
 	; Calculte Sector in FAT
@@ -342,19 +357,79 @@ GetNextCluster:
 	ret
 
 
+
+; ********************************
+; PrintChar
+; IN:
+; 	- al: Char to print
+; ********************************
+PrintChar:
+	pusha
+
+	; Setup INT
+	mov 	ah, 0x0E
+	mov 	bx, 0x00
+	int 	0x10
+
+	; Restore & Return
+	popa
+	ret
+
+; ********************************
+; PrintNumber
+; IN:
+; 	- EAX: NumberToPrint
+; ********************************
+PrintNumber:
+	; Save state
+	pushad
+
+	; Loops
+	xor 	bx, bx
+    mov 	ecx, 10
+
+	.DigitLoop:
+	    xor 	edx, edx
+	    div 	ecx
+
+	    ; now eax <-- eax/10
+	    ;     edx <-- eax % 10
+
+	    ; print edx
+	    ; this is one digit, which we have to convert to ASCII
+	    ; the print routine uses edx and eax, so let's push eax
+	    ; onto the stack. we clear edx at the beginning of the
+	    ; loop anyway, so we don't care if we much around with it
+
+	    ; convert dl to ascii
+	    add 	dx, 48
+
+	    ; Store it
+	    push 	dx
+	    inc 	bx
+
+	    ; if eax is zero, we can quit
+	    cmp 	eax, 0
+	    jnz 	.DigitLoop
+
+	.PrintLoop:
+		pop 	ax
+
+		; Print it
+		call 	PrintChar
+
+		; Decrease
+		dec 	bx
+		jnz 	.PrintLoop
+
+    ; Done
+    popad
+    ret
+
 ; **************************
 ; Variables
 ; **************************
 szStage2					db 		"SSBL    STM"
-
-; This is used for the extended read function (int 0x13)
-DiskPackage:				db 0x10
-							db 0
-	.SectorsToRead			dw 1
-	.Offset					dw 0x0500
-	.Segment 				dw 0x0000
-	.Sector 				dq 0
-
 
 ; Fill out bootloader
 times 510-($-$$) db 0
