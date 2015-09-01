@@ -12,7 +12,7 @@
 ; 0x00007E00 - 0x00008FFF		Used by subsystems in this bootloader
 ; 0x00009000 - 0x00009FFF		Memory Map
 ; 0x0000A000 - 0x0000AFFF		Vesa Mode Map / Controller Information
-; 0x0000B000 - 0x0007FFFF		Kernel Loading Bay (420 Kb ? ish)
+; 0x0000B000 - 0x0007FFFF		Kernel Loading Bay (467 Kb ? ish)
 ; Rest above is not reliable
 
 ; 16 Bit Code, Origin at 0x500
