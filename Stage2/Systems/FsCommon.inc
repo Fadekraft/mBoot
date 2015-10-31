@@ -18,13 +18,14 @@ BITS 16
 
 ; Includes
 %include "Systems/Fat.inc"
-
+%include "Systems/Mfs.inc"
 
 ; **************************
 ; BIOS ReadSector 
 ; IN:
 ; 	- ES:BX: Buffer
-;	- EAX: Sector start
+;	- EAX: Sector start low-dword
+;	- ESI: Sector start high-dword
 ; 	- ECX: Sector count
 ; 	- EDX: Sector size in bytes
 ;
@@ -38,6 +39,7 @@ ReadSector:
 	mov 	word [DiskPackage.Segment], es
 	mov 	word [DiskPackage.Offset], bx
 	mov 	dword [DiskPackage.Sector], eax
+	mov		dword [DiskPackage.Sector + 4], esi
 
 	.sLoop:
 		; Setup Package
@@ -100,7 +102,7 @@ LoadFile:
 	xor 	ecx, ecx
 	mov 	cl, byte [bFileSysType]
 
-	; MFS? 
+	; MFS (Old)? 
 	cmp 	cl, 0
 	je 		.MFS
 	cmp 	cl, 1
@@ -114,12 +116,17 @@ LoadFile:
 	cmp 	cl, 4
 	je 		.FAT
 
+	; Mfs?
+	cmp		cl, 5
+	je		.MFS
+
 	; Wtf?
 	jmp 	.Done
 
 	; MFS
 	.MFS:
-		jmp .Done
+		call	MfsLoadFile
+		jmp		.Done
 
 	; FAT
 	.FAT:
@@ -150,7 +157,7 @@ SetupFS:
 	mov 	esi, szPrefix
 	call 	Print
 
-	; 0, 1 => MFS
+	; 0, 1 => MFS (Old)
 	cmp 	al, 0
 	je 		.NotSupported
 
@@ -166,6 +173,10 @@ SetupFS:
 
 	cmp 	al, 4
 	je 		.SetupFAT32
+
+	; 5 => MFS1
+	cmp 	al, 5
+	je 		.iSetupMFS
 
 	; End of list
 	jmp 	.NotSupported
@@ -214,6 +225,20 @@ SetupFS:
 		call 	SetupFat
 		jmp 	.Done
 
+	.iSetupMFS:
+		; Print
+		mov 	esi, szFsSetup
+		call 	Print
+
+		mov 	esi, szMfs
+		call 	Print
+
+		; Setup
+		pop 	ax
+		mov 	al, 0
+		call 	SetupMfs
+		jmp 	.Done
+
 	; Not supported
 	.NotSupported:
 		; Print
@@ -244,7 +269,7 @@ SetupFS:
 szFsSetup						db		"Setting up ", 0x00
 szFsLoading						db 		"Loading Kernel", 0x00
 szNotSupported					db 		"Filesystem is not supported", 0x00
-szMfs							db 		"MFS", 0x00
+szMfs							db 		"MFS-1", 0x00
 szFat12							db		"FAT 12", 0x00
 szFat16							db		"FAT 16", 0x00
 szFat32 						db 		"Fat 32", 0x00

@@ -90,7 +90,10 @@ GetNextCluster:
 	push 	bx
 
 	; Read Sector
+	push	esi
+	xor		esi, esi
 	call 	ReadSector
+	pop		esi
 	pop 	bx
 	pop 	es
 
@@ -141,7 +144,10 @@ ReadCluster:
 	mov 	dx, word [FatBootSector + FatBootSectorStruct.BytesPerSector]
 
 	; Read
+	push	esi
+	xor		esi, esi
 	call 	ReadSector
+	pop		esi
 
 	; Save position
 	mov 	word [wFATTemporary0], bx
