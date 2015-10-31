@@ -251,4 +251,5 @@ bDriveNumber 					db 		0
 dKernelSize						dd 		0
 
 ; 2 -> FAT12, 3 -> FAT16, 4 -> FAT32
+; 5 -> MFS1
 bStage1Type						db 		0
