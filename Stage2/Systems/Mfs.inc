@@ -95,6 +95,7 @@ GetNextBucket:
 	; Find Entry
 	pop 	edx
 	xchg 	esi, edx
+	shl		esi, 2
 	mov 	esi, dword [es:bx + si]
 
 	; Restore & Return
@@ -155,15 +156,16 @@ ReadBucket:
 
 	; Done
 	popad
-	mov 	bx, word [wFATTemporary0]
-	mov 	esi, dword [dFATTemporary1]
+	mov 	bx, word [wMfsTemporary0]
+	mov 	esi, dword [wMfsTemporary1]
 	ret
 
 
 ; ****************************
 ; MfsLoadFile
 ; IN:
-; 	- DS:SI: Filename
+; 	- DS:ESI: Filename
+;	- ECX: Filename Length
 ; 	- ES:BX: Buffer
 ; OUT:
 ;	- EAX: Filesize
@@ -175,8 +177,8 @@ MfsLoadFile:
 	mov 	word [wMFSLoadFileFOffset], bx
 	mov 	dword [dMFSLoadFileFName], esi
 
-	; Step 1. Read FAT Table
-	mov 	esi, 0 ;dword [RootBucket]
+	; Step 1. Read root directory
+	mov 	esi, dword [dRootBucket]
 
 	; Read Loop
 	.cLoop:
@@ -185,7 +187,9 @@ MfsLoadFile:
 		mov 	bx, MEMLOCATION_FAT_FATTABLE
 		
 		; ReadCluster returns next cluster in chain
+		push	ecx
 		call 	ReadBucket
+		pop		ecx
 		push 	esi
 
 		; Step 3. Parse entries and look for esi
@@ -196,31 +200,31 @@ MfsLoadFile:
 		; Lengtho f name in CX
 		xor 	eax, eax
 		xor 	ebx, ebx
-		xor 	ecx, ecx
-		mov 	cx, 0x000B
+		push	ecx
+		xor		ecx, ecx
 		mov 	bx, word [MfsBootSector + MfsBootSectorStruct.SectorsPerBucket]
 		shr		ebx, 1
 		mov 	edx, ebx
 
 		; End of root?
 		.EntryLoop:
-			cmp 	[es:di], ch
+			cmp 	[es:edi], ch
 			je 		.ExitLoop
 
 			; No, phew, lets check if filename matches
+			pop		ecx
 			pushad
+			add		edi, 0x48
         	repe    cmpsb
         	popad
         	jne 	.Next
 
         	; YAY WE FOUND IT!
-        	; Get clusterLo & clusterHi
-        	push    word [es:di + 0x14]
-        	push    word [es:di + 0x1A]
-        	pop 	esi
+        	; Get bucket
+        	mov    esi, dword [es:edi + 0x4]
 
         	; Get filesize 
-        	mov 	eax, dword [es:di + 0x1C]
+        	mov 	eax, dword [es:di + 0x38]
         	mov 	dword [dMFSLoadFileFSize], eax
 
         	; Lets load the fuck out of this file
@@ -234,7 +238,7 @@ MfsLoadFile:
 				call 	ReadBucket
 
 				; Check
-				cmp 	esi, 0x0FFFFFFF
+				cmp 	esi, 0xFFFFFFFF
 				jne		.dLoop
 
 
@@ -248,9 +252,9 @@ MfsLoadFile:
         		dec 	dx
         		jnz 	.EntryLoop
 
-		; Dont loop if esi is above 0x0FFFFFFF
+		; Dont loop if esi is above 0xFFFFFFFF
 		pop 	esi
-		cmp 	esi, 0x0FFFFFFF
+		cmp 	esi, 0xFFFFFFFF
 		jne		.cLoop
 		jmp 	.NotFound
 
@@ -320,8 +324,10 @@ SetupMfs:
 	add		eax, ebx
 	adc		edx, ecx
 
-	mov		ebx, dword [MfsBootSector + MfsBootSectorStruct.TotalSectors]
-	mov		ecx, dword [MfsBootSector + MfsBootSectorStruct.TotalSectors + 4]
+	mov		ebx, eax
+	mov		ecx, edx
+	mov		eax, dword [MfsBootSector + MfsBootSectorStruct.TotalSectors]
+	mov		edx, dword [MfsBootSector + MfsBootSectorStruct.TotalSectors + 4]
 
 	; subtract
 	sub		eax, ebx
@@ -330,6 +336,20 @@ SetupMfs:
 	; Save
 	mov 	dword [qBucketMapSector], eax
 	mov 	dword [qBucketMapSector + 4], edx
+
+	; Now, get root bucket
+	mov		eax, dword [MfsBootSector + MfsBootSectorStruct.MasterBucketSector]
+	mov		esi, dword [MfsBootSector + MfsBootSectorStruct.MasterBucketSector + 4]
+	mov		ecx, 1
+	xor		ebx, ebx
+	mov		es, bx
+	mov		ebx, MEMLOCATION_FAT_GETCLUSTER
+	call	ReadSector
+
+	mov		eax, MEMLOCATION_FAT_GETCLUSTER
+	mov		ebx, 12
+	mov		ecx, [eax + ebx]
+	mov		dword [dRootBucket], ecx
 
 	; Done
 	popad
@@ -347,13 +367,28 @@ SetupMfs:
 ;	- EDX: High Dword Result
 ; ****************************
 Div64:
+	; Save ebx & init
+	push ebx
+	xor	ebx, ebx
+
+	; Save lower 
 	push eax
 	mov eax, edx
 	xor edx, edx
-	div ecx ; get high 32 bits of quotient
-	push eax ; store them on stack, get low 32 bits of dividend
-	div ecx ; get low 32 bits of quotient
-	pop edx ; 64-bit quotient in edx:eax now
+
+	; Don't divide by zero
+	test eax, eax
+	je .SkipHigh
+
+	; Divide high by ECX
+	div ecx 
+	mov	ebx, eax
+	
+	.SkipHigh:
+	pop eax
+	div ecx
+	mov edx, ebx
+	pop ebx
 	ret
 
 ; ****************************
@@ -388,6 +423,7 @@ Mul64:
 bMfsDriveNumber					db 		0
 qBucketMapSector				dq 		0
 qBucketCount					dq 		0
+dRootBucket						dd		0
 wMfsTemporary0					dw 		0
 wMfsTemporary1					dd 		0
 dMFSLoadFileFName				dd 		0

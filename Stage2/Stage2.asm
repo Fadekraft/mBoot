@@ -136,6 +136,7 @@ Entry:
 	call 	Print
 
 	mov 	esi, szKernel
+	mov		edi, szKernelUtf
 	xor 	eax, eax
 	xor 	ebx, ebx
 	mov 	ax, MEMLOCATION_KERNEL_SEGMENT
@@ -245,6 +246,7 @@ szLoadingKernel					db 		"Loading MollenOS Kernel", 0x00
 szFinishBootMsg 				db 		"Finishing Boot Sequence", 0x0D, 0x0A, 0x00
 
 szKernel						db 		"MCORE   MOS"
+szKernelUtf						db		"MCore.mos", 0x0
 
 ; Practical stuff
 bDriveNumber 					db 		0

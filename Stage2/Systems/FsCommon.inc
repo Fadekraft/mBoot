@@ -87,8 +87,9 @@ ReadSector:
 ; ****************************
 ; LoadFile
 ; IN:
-; 	- DS:SI: Filename
-; 	- ES:BX: Buffer
+; 	- DS:ESI: Filename (8:3)
+;	- DS:EDI: Filename (UTF-8)
+; 	- ES:EBX: Buffer
 ; OUT:
 ;	- EAX: Filesize
 ; ****************************
@@ -96,6 +97,7 @@ LoadFile:
 	; Save state
 	push 	ecx
 	push 	edx
+	push	esi
 	push 	edi
 
 	; Get type of FS
@@ -125,8 +127,22 @@ LoadFile:
 
 	; MFS
 	.MFS:
-		call	MfsLoadFile
-		jmp		.Done
+		mov		esi, edi
+		push	esi
+		xor		ecx, ecx
+
+		.Count:
+			mov		al, byte [ds:esi]
+			test	al, al
+			je		.CountDone
+			inc		ecx
+			inc		esi
+			jmp		.Count
+
+		.CountDone:
+			pop		esi
+			call	MfsLoadFile
+			jmp		.Done
 
 	; FAT
 	.FAT:
@@ -134,6 +150,7 @@ LoadFile:
 
 	.Done:
 		pop 	edi
+		pop		esi
 		pop 	edx
 		pop 	ecx
 		ret
