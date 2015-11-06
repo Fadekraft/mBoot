@@ -106,9 +106,9 @@ LoadFile:
 
 	; MFS (Old)? 
 	cmp 	cl, 0
-	je 		.MFS
+	je 		.Done
 	cmp 	cl, 1
-	je 		.MFS
+	je 		.Done
 
 	; Fat? 
 	cmp 	cl, 2
@@ -128,21 +128,8 @@ LoadFile:
 	; MFS
 	.MFS:
 		mov		esi, edi
-		push	esi
-		xor		ecx, ecx
-
-		.Count:
-			mov		al, byte [ds:esi]
-			test	al, al
-			je		.CountDone
-			inc		ecx
-			inc		esi
-			jmp		.Count
-
-		.CountDone:
-			pop		esi
-			call	MfsLoadFile
-			jmp		.Done
+		call	MfsLoadFile
+		jmp		.Done
 
 	; FAT
 	.FAT:

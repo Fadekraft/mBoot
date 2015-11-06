@@ -246,7 +246,7 @@ szLoadingKernel					db 		"Loading MollenOS Kernel", 0x00
 szFinishBootMsg 				db 		"Finishing Boot Sequence", 0x0D, 0x0A, 0x00
 
 szKernel						db 		"MCORE   MOS"
-szKernelUtf						db		"MCore.mos", 0x0
+szKernelUtf						db		"System/Sys32.mos", 0x0
 
 ; Practical stuff
 bDriveNumber 					db 		0

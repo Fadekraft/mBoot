@@ -165,7 +165,6 @@ ReadBucket:
 ; MfsLoadFile
 ; IN:
 ; 	- DS:ESI: Filename
-;	- ECX: Filename Length
 ; 	- ES:BX: Buffer
 ; OUT:
 ;	- EAX: Filesize
@@ -176,6 +175,7 @@ MfsLoadFile:
 	mov 	word [wMFSLoadFileFSegment], ax
 	mov 	word [wMFSLoadFileFOffset], bx
 	mov 	dword [dMFSLoadFileFName], esi
+	mov		byte [bMfsEndOfString], 0
 
 	; Step 1. Read root directory
 	mov 	esi, dword [dRootBucket]
@@ -185,6 +185,27 @@ MfsLoadFile:
 		mov 	bx, 0x0000
 		mov 	es, bx
 		mov 	bx, MEMLOCATION_FAT_FATTABLE
+
+		; Calculate length of what we are looking for
+		xor		eax, eax
+		xor		ecx, ecx
+		push	esi
+		mov		esi, dword [dMFSLoadFileFName]
+
+		.CountLoop:
+			mov	al, [ds:esi]
+			cmp al, 0x2F
+			je .CountDone
+			test al, al
+			je .CountEnd
+			inc ecx
+			inc esi
+			jmp .CountLoop
+
+		.CountEnd:
+			mov	byte [bMfsEndOfString], 1
+		.CountDone:
+			pop esi
 		
 		; ReadCluster returns next cluster in chain
 		push	ecx
@@ -205,6 +226,7 @@ MfsLoadFile:
 		mov 	bx, word [MfsBootSector + MfsBootSectorStruct.SectorsPerBucket]
 		shr		ebx, 1
 		mov 	edx, ebx
+		pop		ecx
 
 		; End of root?
 		.EntryLoop:
@@ -212,7 +234,6 @@ MfsLoadFile:
 			je 		.ExitLoop
 
 			; No, phew, lets check if filename matches
-			pop		ecx
 			pushad
 			add		edi, 0x48
         	repe    cmpsb
@@ -223,6 +244,21 @@ MfsLoadFile:
         	; Get bucket
         	mov    esi, dword [es:edi + 0x4]
 
+			; Was it end of chain?
+			cmp		byte [bMfsEndOfString], 1
+			je		.LoadKernel
+
+			; Ok, so go deeper, set bucket as next
+			mov		eax, esi
+			pop		esi
+			mov		esi, dword [dMFSLoadFileFName]
+			add		esi, ecx
+			inc		esi
+			mov		dword [dMFSLoadFileFName], esi
+			mov		esi, eax
+			jmp		.cLoop
+
+			.LoadKernel:
         	; Get filesize 
         	mov 	eax, dword [es:di + 0x38]
         	mov 	dword [dMFSLoadFileFSize], eax
@@ -421,6 +457,7 @@ Mul64:
 
 ; Etc
 bMfsDriveNumber					db 		0
+bMfsEndOfString					db		0
 qBucketMapSector				dq 		0
 qBucketCount					dq 		0
 dRootBucket						dd		0
