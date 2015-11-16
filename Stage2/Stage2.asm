@@ -12,7 +12,7 @@
 ; 0x00007E00 - 0x00008FFF		Used by subsystems in this bootloader
 ; 0x00009000 - 0x00009FFF		Memory Map
 ; 0x0000A000 - 0x0000AFFF		Vesa Mode Map / Controller Information
-; 0x0000B000 - 0x0007FFFF		Kernel Loading Bay (467 Kb ? ish)
+; 0x0000B000 - 0x0007FFFF		File Loading Bay (467 Kb ? ish)
 ; Rest above is not reliable
 
 ; 16 Bit Code, Origin at 0x500
@@ -30,10 +30,11 @@ jmp Entry
 %define 		MEMLOCATION_FAT_FATTABLE		0x8000
 %define 		MEMLOCATION_MEMORY_MAP			0x9000
 %define 		MEMLOCATION_VESA_INFO_BASE		0xA000
-%define 		MEMLOCATION_KERNEL_SEGMENT		0x0000
-%define 		MEMLOCATION_KERNEL_OFFSET		0xB000
-%define 		MEMLOCATION_KERNEL_LOWER		0xB000 
+%define 		MEMLOCATION_FLOAD_SEGMENT		0x0000
+%define 		MEMLOCATION_FLOAD_OFFSET		0xB000
+%define 		MEMLOCATION_FLOAD_LOWER			0xB000 
 %define 		MEMLOCATION_KERNEL_UPPER		0x100000
+%define 		MEMLOCATION_RAMDISK_UPPER		0x200000
 
 ; Includes
 %include "Systems/Common.inc"
@@ -139,11 +140,12 @@ Entry:
 	mov		edi, szKernelUtf
 	xor 	eax, eax
 	xor 	ebx, ebx
-	mov 	ax, MEMLOCATION_KERNEL_SEGMENT
+	mov 	ax, MEMLOCATION_FLOAD_SEGMENT
 	mov 	es, ax
-	mov 	bx, MEMLOCATION_KERNEL_OFFSET
+	mov 	bx, MEMLOCATION_FLOAD_OFFSET
 	call 	LoadFile
 
+	; Did it load correctly?
 	cmp 	eax, 0
 	jne 	Continue
 
@@ -161,6 +163,77 @@ Continue:
 	; Print
 	mov 	esi, szSuccess
 	call 	Print
+
+	; Now, the tricky thing comes
+	; We must go to 32-bit, copy the kernel
+	; to 0x1000000, then return back
+	; so we can load ramdisk
+
+	; GO PROTECTED MODE!
+	mov		eax, cr0
+	or		eax, 1
+	mov		cr0, eax
+
+	; Jump into 32 bit
+	jmp 	CODE_DESC:LoadKernel32
+
+LoadRamDisk:
+	; Clear registers
+	xor 	eax, eax
+	xor 	ebx, ebx
+	xor 	ecx, ecx
+	xor		edx, edx
+	xor 	esi, esi
+	xor 	edi, edi
+
+	; Setup segments, leave 16 bit protected mode
+	mov		ds, ax
+	mov		es, ax
+	mov		fs, ax
+	mov		gs, ax
+
+	; Setup stack
+	mov		ss, ax
+	mov		ax, 0x7BFF
+	mov		sp, ax
+	xor 	ax, ax
+
+	; Load 16 Idt 
+	call	LoadIdt16
+
+	; Enable interrupts
+	sti
+
+	; Print load ramdisk
+	mov 	esi, szLoadingRamDisk
+	call 	Print
+
+	; Actually load it
+	mov 	esi, szRamDisk
+	mov		edi, szRamDiskUtf
+	xor 	eax, eax
+	xor 	ebx, ebx
+	mov 	ax, MEMLOCATION_FLOAD_SEGMENT
+	mov 	es, ax
+	mov 	bx, MEMLOCATION_FLOAD_OFFSET
+	call 	LoadFile
+
+	; Did it load correctly?
+	cmp 	eax, 0
+	jne 	Finish16Bit
+
+	; Damnit
+	mov 	esi, szFailed
+	call 	Print
+
+	; Fuckup
+	call 	SystemsFail
+
+Finish16Bit:
+	; Save
+	mov 	dword [BootHeader + MultiBoot.ModuleCount], eax
+	mov	eax, MEMLOCATION_RAMDISK_UPPER
+	mov 	dword [BootHeader + MultiBoot.ModuleAddr], eax
 
 	; Print last message 
 	mov 	esi, szPrefix
@@ -180,12 +253,44 @@ Continue:
 	; Jump into 32 bit
 	jmp 	CODE_DESC:Entry32
 
-
 align 32
 ; ****************************
 ; 32 Bit Stage Below 
 ; ****************************
 BITS 32
+
+LoadKernel32:
+	; Disable Interrupts
+	cli
+
+	; Setup Segments, Stack etc
+	xor 	eax, eax
+	mov 	ax, DATA_DESC
+	mov 	ds, ax
+	mov 	fs, ax
+	mov 	gs, ax
+	mov 	ss, ax
+	mov 	es, ax
+	mov 	esp, 0x7BFF
+
+	; Kernel Relocation to 1mb (PE, ELF, binary)
+	mov 	esi, MEMLOCATION_FLOAD_LOWER
+	mov 	edi, MEMLOCATION_KERNEL_UPPER
+	call 	PELoad
+
+	; Perfect, now we must return to 16 bit
+	; So we can load the RD
+	
+	; Load 16-bit protected mode descriptor
+	mov eax, DATA16_DESC
+	mov ds, eax
+	mov es, eax
+	mov fs, eax
+	mov gs, eax
+	mov ss, eax
+
+	; Jump to set CS!
+	jmp		0:LoadRamDisk
 
 Entry32:
 	; Setup Segments, Stack etc
@@ -198,18 +303,21 @@ Entry32:
 	mov 	es, ax
 	mov 	esp, 0x7BFF
 
-	; Disable ALL irq (This is more correct than CLI)
+	; Disable ALL irq
 	mov 	al, 0xff
 	out 	0xa1, al
 	out 	0x21, al
 
-	; But we cli aswell haha
+	; But we cli aswell
 	cli
 
-	; Kernel Relocation to 1mb (PE, ELF, binary)
-	mov 	esi, MEMLOCATION_KERNEL_LOWER
-	mov 	edi, MEMLOCATION_KERNEL_UPPER
-	call 	PELoad
+	; RamDisk Relocation to 2mb
+	mov 	esi, MEMLOCATION_FLOAD_LOWER
+	mov 	edi, MEMLOCATION_RAMDISK_UPPER
+	mov		ecx, dword [BootHeader + MultiBoot.ModuleCount]
+	shr		ecx, 2
+	inc		ecx
+	rep		movsd
 
 	; Setup Registers
 	xor 	esi, esi
@@ -243,10 +351,13 @@ szPrefix 						db 		"                   - ", 0x00
 szSuccess						db 		" [OK]", 0x0D, 0x0A, 0x00
 szFailed						db 		" [FAIL]", 0x0D, 0x0A, 0x00
 szLoadingKernel					db 		"Loading MollenOS Kernel", 0x00
+szLoadingRamDisk				db 		"Loading MollenOS RamDisk", 0x00
 szFinishBootMsg 				db 		"Finishing Boot Sequence", 0x0D, 0x0A, 0x00
 
 szKernel						db 		"MCORE   MOS"
+szRamDisk						db		"INITRD  MOS"
 szKernelUtf						db		"System/Sys32.mos", 0x0
+szRamDiskUtf					db		"System/InitRd32.mos", 0x0
 
 ; Practical stuff
 bDriveNumber 					db 		0
