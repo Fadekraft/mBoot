@@ -1,7 +1,21 @@
-; *******************************************************
-; Mollen-OS Stage 1 Bootloader - FAT32 
-; Copyright 2015 (C)
-; Author: Philip Meulengracht
+; MollenOS
+;
+; Copyright 2011 - 2016, Philip Meulengracht
+;
+; This program is free software : you can redistribute it and / or modify
+; it under the terms of the GNU General Public License as published by
+; the Free Software Foundation ? , either version 3 of the License, or
+; (at your option) any later version.
+;
+; This program is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+; GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public License
+; along with this program.If not, see <http://www.gnu.org/licenses/>.
+;
+; Mollen-OS Stage 1 Bootloader - MFS1
 ; Version 1.0
 ; *******************************************************
 ; Memory Map:
@@ -11,10 +25,6 @@
 ; 0x00007C00 - 0x00007DFF		Bootloader (512 Bytes)
 ; 0x00007E00 - 0x0007FFFF		Kernel Loading Bay (480.5 Kb)
 ; Rest above is not reliable
-
-; In this bootloader we use the kernel loading bay a lot
-; 0x00007E00 - 0x00007FFF 		GetNextCluster (Usage)
-; 0x00008000 - ClusterSize		Used by LocateFile Procedure
 
 
 ; 16 Bit Code, Origin at 0x0

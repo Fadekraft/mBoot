@@ -1,7 +1,21 @@
-; *******************************************************
+; MollenOS
+;
+; Copyright 2011 - 2016, Philip Meulengracht
+;
+; This program is free software : you can redistribute it and / or modify
+; it under the terms of the GNU General Public License as published by
+; the Free Software Foundation ? , either version 3 of the License, or
+; (at your option) any later version.
+;
+; This program is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+; GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public License
+; along with this program.If not, see <http://www.gnu.org/licenses/>.
+;
 ; Mollen-OS Stage 2 Bootloader
-; Copyright 2015 (C)
-; Author: Philip Meulengracht
 ; Version 1.0
 ; *******************************************************
 ; Gdt.inc
@@ -17,7 +31,8 @@ BITS 16
 %define 		NULL_DESC 		0
 %define 		CODE_DESC 		0x8
 %define 		DATA_DESC 		0x10
-%define 		DATA16_DESC 	0x18
+%define			CODE16_DESC		0x18
+%define 		DATA16_DESC 	0x20
 
 
 ; ********************************
@@ -66,6 +81,14 @@ StartOfGdt:
 	db 0                ; base middle
 	db 10010010b        ; access
 	db 11001111b        ; granularity
+	db 0                ; base high
+
+; gdt code 16bit:	    ; code descriptor
+	dw 0FFFFh           ; limit low
+	dw 0                ; base low
+	db 0                ; base middle
+	db 10011010b        ; access
+	db 00001111b        ; granularity
 	db 0                ; base high
 
 ; gdt data 16bit:       ; data descriptor

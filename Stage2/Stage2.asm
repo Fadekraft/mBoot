@@ -1,7 +1,21 @@
-; *******************************************************
+; MollenOS
+;
+; Copyright 2011 - 2016, Philip Meulengracht
+;
+; This program is free software : you can redistribute it and / or modify
+; it under the terms of the GNU General Public License as published by
+; the Free Software Foundation ? , either version 3 of the License, or
+; (at your option) any later version.
+;
+; This program is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+; GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public License
+; along with this program.If not, see <http://www.gnu.org/licenses/>.
+;
 ; Mollen-OS Stage 2 Bootloader
-; Copyright 2015 (C)
-; Author: Philip Meulengracht
 ; Version 1.0
 ; *******************************************************
 ; Memory Map:
@@ -46,7 +60,6 @@ jmp Entry
 
 ; FileSystem Includes
 %include "Systems/FsCommon.inc"
-
 
 ; *****************************
 ; Entry Point
@@ -178,6 +191,18 @@ Continue:
 	jmp 	CODE_DESC:LoadKernel32
 
 LoadRamDisk:
+	; Load 16 Idt 
+	call	LoadIdt16
+
+	; Disable Protected mode
+	mov		eax, cr0
+	and		eax, 0xFFFFFFFE
+	mov		cr0, eax
+
+	; Far jump to real mode unprotected
+	jmp 	0:LeaveProtected
+
+LeaveProtected:
 	; Clear registers
 	xor 	eax, eax
 	xor 	ebx, ebx
@@ -198,13 +223,13 @@ LoadRamDisk:
 	mov		sp, ax
 	xor 	ax, ax
 
-	; Load 16 Idt 
-	call	LoadIdt16
-
 	; Enable interrupts
 	sti
 
 	; Print load ramdisk
+	mov 	esi, szPrefix
+	call 	Print
+
 	mov 	esi, szLoadingRamDisk
 	call 	Print
 
@@ -234,6 +259,10 @@ Finish16Bit:
 	mov 	dword [BootHeader + MultiBoot.ModuleCount], eax
 	mov	eax, MEMLOCATION_RAMDISK_UPPER
 	mov 	dword [BootHeader + MultiBoot.ModuleAddr], eax
+
+	; Print
+	mov 	esi, szSuccess
+	call 	Print
 
 	; Print last message 
 	mov 	esi, szPrefix
@@ -289,8 +318,8 @@ LoadKernel32:
 	mov gs, eax
 	mov ss, eax
 
-	; Jump to set CS!
-	jmp		0:LoadRamDisk
+	; Jump to protected real mode, set CS!
+	jmp		CODE16_DESC:LoadRamDisk
 
 Entry32:
 	; Setup Segments, Stack etc
