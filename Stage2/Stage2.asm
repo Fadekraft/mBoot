@@ -307,6 +307,9 @@ LoadKernel32:
 	mov 	edi, MEMLOCATION_KERNEL_UPPER
 	call 	PELoad
 
+	; Save entry
+	mov 	dword [dKernelEntry], ebx
+
 	; Perfect, now we must return to 16 bit
 	; So we can load the RD
 	
@@ -351,7 +354,7 @@ Entry32:
 	; Setup Registers
 	xor 	esi, esi
 	xor 	edi, edi
-	mov 	ecx, ebx
+	mov 	ecx, dword [dKernelEntry]
 	mov 	eax, MULTIBOOT_MAGIC
 	mov 	ebx, BootHeader
 	mov 	edx, dword [dKernelSize]
@@ -391,6 +394,7 @@ szRamDiskUtf					db		"System/InitRd32.mos", 0x0
 ; Practical stuff
 bDriveNumber 					db 		0
 dKernelSize						dd 		0
+dKernelEntry						dd		0
 
 ; 2 -> FAT12, 3 -> FAT16, 4 -> FAT32
 ; 5 -> MFS1
