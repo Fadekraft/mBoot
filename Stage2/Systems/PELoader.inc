@@ -102,6 +102,8 @@ struc PEMainHeader
 	.SizeHeapCommit 	resd 	1
 	.LoaderFlags		resd 	1
 	.NumRVA				resd 	1
+	.ExportAddrRva			resd	1
+	.ExportSize			resd 	1
 endstruc
 
 struc PESectionHeader
@@ -131,6 +133,9 @@ PELoad:
 	pushad
 	mov 	dword [dPEFileBase], esi
 
+	; Save target address
+	mov	dword [BootDescriptor + MollenOsBootDescriptor.KernelAddr], edi
+
 	; Copy DOS header
 	pushad
 	mov 	ecx, 16 			; 16 * 4 = 64
@@ -151,7 +156,7 @@ PELoad:
 
 	; Copy PE header
 	pushad
-	mov 	ecx, 30 			; 30 * 4 = 120
+	mov 	ecx, 32 			; 30 * 4 = 120
 	mov 	edi, PEHeader
 	cld
 	rep 	movsd
@@ -172,6 +177,12 @@ PELoad:
 	mov 	eax, dword [PEHeader + PEMainHeader.ImageBase]
 	add 	eax, dword [PEHeader + PEMainHeader.EntryPoint]
 	mov 	dword [dPEEntryPoint], eax
+
+	; Get export section
+	mov	eax, dword [PEHeader + PEMainHeader.ExportAddrRva]
+	mov	dword [BootDescriptor + MollenOsBootDescriptor.ExportAddr], eax
+	mov	eax, dword [PEHeader + PEMainHeader.ExportSize]
+	mov	dword [BootDescriptor + MollenOsBootDescriptor.ExportSize], eax
 
 	; Get sections
 	xor 	eax, eax
@@ -263,6 +274,9 @@ PELoad:
 			jb 		.ZeroRemaining
 
 		.NextSection:
+			; Save last edi
+			mov	dword [dPELastPage], edi
+
 			; Restore locations
 			pop 	ecx
 			pop 	edi
@@ -284,6 +298,12 @@ PELoad:
 		ret
 
 	.Done:
+		; Page align up
+		mov	eax, dword [dPELastPage]
+		and 	eax, 0xFFFFF000
+		add	eax, 0x1000
+		mov	dword [BootDescriptor + MollenOsBootDescriptor.KernelSize], eax
+
 		; Done
 		popad
 		xor 	eax, eax
@@ -301,7 +321,7 @@ PELoad:
 ; Etc
 dPEEntryPoint 					dd 		0
 dPEFileBase						dd 		0
-
+dPELastPage					dd 		0
 
 ; DOS Header (64 Bytes)
 DosHeader:
@@ -370,6 +390,8 @@ istruc PEMainHeader
 	at PEMainHeader.SizeHeapCommit, 	dd 	0
 	at PEMainHeader.LoaderFlags,		dd 	0
 	at PEMainHeader.NumRVA,				dd 	0 ; 120
+	at PEMainHeader.ExportAddrRva,			dd	0 ; 124
+	at PEMainHeader.ExportSize,			dd	0 ; 128
 iend
 
 ; PE Section Header (40 Bytes)

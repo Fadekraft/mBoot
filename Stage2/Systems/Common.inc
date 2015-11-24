@@ -94,6 +94,16 @@ struc MultiBoot
 	.VBEInterfaceLen	resd	1
 endstruc
 
+struc MollenOsBootDescriptor
+	.KernelAddr 		resd 	1
+	.KernelSize		resd 	1
+	.RamDiskAddr		resd 	1
+	.RamDiskSize 		resd 	1
+	.ExportAddr		resd 	1
+	.ExportSize		resd 	1
+	.SymbolsAddr		resd	1
+	.SymbolsSize		resd	1
+endstruc
 
 ; ********************************
 ; SetTextColor
@@ -268,6 +278,22 @@ istruc MultiBoot
 	at MultiBoot.VBEInterfaceSeg,	dd 0
 	at MultiBoot.VBEInterfaceOff,	dd 0
 	at MultiBoot.VBEInterfaceLen,	dd 0
+iend
+
+; ********************************
+; Os Boot Header
+; ********************************
+align 32
+BootDescriptor:
+istruc MollenOsBootDescriptor
+	at MollenOsBootDescriptor.KernelAddr, 		dd 	0
+	at MollenOsBootDescriptor.KernelSize,		dd 	0
+	at MollenOsBootDescriptor.RamDiskAddr,		dd 	0
+	at MollenOsBootDescriptor.RamDiskSize, 		dd 	0
+	at MollenOsBootDescriptor.ExportAddr,		dd 	0
+	at MollenOsBootDescriptor.ExportSize,		dd 	0
+	at MollenOsBootDescriptor.SymbolsAddr,		dd	0
+	at MollenOsBootDescriptor.SymbolsSize,		dd	0
 iend
 
 %endif

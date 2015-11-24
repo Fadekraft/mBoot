@@ -256,9 +256,9 @@ LeaveProtected:
 
 Finish16Bit:
 	; Save
-	mov 	dword [BootHeader + MultiBoot.ModuleCount], eax
+	mov 	dword [BootDescriptor + MollenOsBootDescriptor.RamDiskSize], eax
 	mov	eax, MEMLOCATION_RAMDISK_UPPER
-	mov 	dword [BootHeader + MultiBoot.ModuleAddr], eax
+	mov 	dword [BootDescriptor + MollenOsBootDescriptor.RamDiskAddr], eax
 
 	; Print
 	mov 	esi, szSuccess
@@ -357,7 +357,7 @@ Entry32:
 	mov 	ecx, dword [dKernelEntry]
 	mov 	eax, MULTIBOOT_MAGIC
 	mov 	ebx, BootHeader
-	mov 	edx, dword [dKernelSize]
+	mov 	edx, BootDescriptor
 
 	; MultiBoot structure also needs to be on stack
 	push 	ebx
