@@ -346,7 +346,7 @@ Entry32:
 	; RamDisk Relocation to 2mb
 	mov 	esi, MEMLOCATION_FLOAD_LOWER
 	mov 	edi, MEMLOCATION_RAMDISK_UPPER
-	mov		ecx, dword [BootHeader + MultiBoot.ModuleCount]
+	mov		ecx, dword [BootDescriptor + MollenOsBootDescriptor.RamDiskSize]
 	shr		ecx, 2
 	inc		ecx
 	rep		movsd
