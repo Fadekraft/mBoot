@@ -288,6 +288,9 @@ align 32
 ; ****************************
 BITS 32
 
+; 32 Bit Includes
+%include "Systems/Cpu.inc"
+
 LoadKernel32:
 	; Disable Interrupts
 	cli
@@ -350,6 +353,12 @@ Entry32:
 	shr		ecx, 2
 	inc		ecx
 	rep		movsd
+
+	; Setup Cpu
+	call	CpuInit
+
+	; If eax is set to 1, 
+	; we will enter 64 bit mode instead (todo)
 
 	; Setup Registers
 	xor 	esi, esi

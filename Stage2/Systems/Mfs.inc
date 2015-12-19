@@ -52,25 +52,25 @@ endstruc
 ; 	- ESI Bucket
 ;
 ; OUT:
+; 	- EAX BucketLength
 ;	- ESI NextBucket
 ; **************************
 GetNextBucket:
 	; Save states
-	push 	eax
 	push 	ebx
 	push 	ecx
 	push 	edx
 	push 	es
 
 	; Calculte Bucket Sector Offset
-	; BucketsPerSector = BytesPerSector / 4;
+	; BucketsPerSector = BytesPerSector / 8;
     ; SectorOffset = Bucket / BucketsPerSector;
     ; SectorIndex = Bucket % BucketsPerSector;
 	xor 	eax, eax
 	xor 	ebx, ebx
 	xor 	edx, edx ; Zero out edx before division!!
 	mov 	ax, word [MfsBootSector + MfsBootSectorStruct.BytesPerSector]
-	mov		ebx, 0x4
+	mov		ebx, 0x8
 	div 	ebx
 	mov		ebx, eax ; ebx = BucketsPerSector
 	xor		edx, edx
@@ -109,32 +109,36 @@ GetNextBucket:
 	; Find Entry
 	pop 	edx
 	xchg 	esi, edx
-	shl		esi, 2
-	mov 	esi, dword [es:bx + si]
+	shl		esi, 3
+	mov 	ecx, dword [es:bx + si]
+	mov 	eax, dword [es:bx + si + 4]
+	mov 	esi, ecx
 
 	; Restore & Return
 	pop 	es
 	pop 	edx
 	pop 	ecx
 	pop 	ebx
-	pop 	eax
 	ret
 
 ; **************************
 ; MFS ReadBucket
 ; IN: 
-;	- ES:BX Buffer
+; 	- EAX BucketLength
 ;	- ESI Bucket
+;	- ES:BX Buffer
 ;
 ; OUT:
+; 	- EAX BucketLength
 ;	- ESI NextBucket
 ; **************************
 ReadBucket:
 	pushad
 
-	; Save Bx
+	; Save vars
 	push	esi
 	push 	bx
+	push 	eax
 
 	; Calculate Sector
 	; Sector = Bucket * SectorsPerBucket
@@ -143,14 +147,28 @@ ReadBucket:
 	mov		si, word [MfsBootSector + MfsBootSectorStruct.SectorsPerBucket]
 	xor		ecx, ecx
 	call	Mul64
+	; eax is low dword
+	; edx is high dword
 
-	; Eax;edx is now the sector of data
-	mov		esi, edx
+	; Calculate sector count
+	pop 	ecx
+	push 	eax
+	push 	edx
+	xor 	eax, eax
+	xor 	edx, edx
+	mov 	ax, word [MfsBootSector + MfsBootSectorStruct.SectorsPerBucket]
+	mul 	ecx
+	mov 	ecx, eax
+
+	; Restore earlier calcs 
+	pop 	esi
+	pop 	eax
+
+	; Eax;esi is now the sector of data
+	; Ecx is how many sectors to read
 	xor 	ebx, ebx
-	xor 	ecx, ecx
 	xor 	edx, edx
 	pop 	bx
-	mov 	cx, word [MfsBootSector + MfsBootSectorStruct.SectorsPerBucket]
 	mov 	dx, word [MfsBootSector + MfsBootSectorStruct.BytesPerSector]
 
 	; Read
@@ -164,6 +182,7 @@ ReadBucket:
 	; Si still has cluster num, call next
 	call 	GetNextBucket
 	mov 	dword [wMfsTemporary1], esi
+	mov 	dword [dMfsTemporary2], eax
 
 	; Restore
 	pop 	es
@@ -172,6 +191,7 @@ ReadBucket:
 	popad
 	mov 	bx, word [wMfsTemporary0]
 	mov 	esi, dword [wMfsTemporary1]
+	mov 	eax, dword [dMfsTemporary2]
 	ret
 
 
@@ -185,6 +205,7 @@ ReadBucket:
 ; ****************************
 MfsLoadFile:
 	; Save arguments, we dont need them yet
+	xchg 	bx, bx
 	mov 	ax, es
 	mov 	word [wMFSLoadFileFSegment], ax
 	mov 	word [wMFSLoadFileFOffset], bx
@@ -223,6 +244,7 @@ MfsLoadFile:
 		
 		; ReadCluster returns next cluster in chain
 		push	ecx
+		mov 	eax, 1
 		call 	ReadBucket
 		pop		ecx
 		push 	esi
@@ -232,7 +254,7 @@ MfsLoadFile:
 		mov 	esi, dword [dMFSLoadFileFName]
 
 		; Entry Count (dx)
-		; Lengtho f name in CX
+		; Length of name in CX
 		xor 	eax, eax
 		xor 	ebx, ebx
 		push	ecx
@@ -249,14 +271,15 @@ MfsLoadFile:
 
 			; No, phew, lets check if filename matches
 			pushad
-			add		edi, 0x48
+			add		edi, 0x4C
         	repe    cmpsb
         	popad
         	jne 	.Next
 
         	; YAY WE FOUND IT!
         	; Get bucket
-        	mov    esi, dword [es:edi + 0x4]
+        	mov	    esi, dword [es:edi + 0x4]
+        	mov 	eax, dword [es:edi + 0x8]
 
 			; Was it end of chain?
 			cmp		byte [bMfsEndOfString], 1
@@ -274,13 +297,15 @@ MfsLoadFile:
 
 			.LoadKernel:
         	; Get filesize 
-        	mov 	eax, dword [es:di + 0x38]
+        	push 	eax
+        	mov 	eax, dword [es:di + 0x3C]
         	mov 	dword [dMFSLoadFileFSize], eax
 
         	; Lets load the fuck out of this file
 			mov 	ax, word [wMFSLoadFileFSegment]
 			mov 	es, ax
 			mov 	bx, word [wMFSLoadFileFOffset]
+			pop 	eax
 
 			; Load 
 			.dLoop:
@@ -302,7 +327,7 @@ MfsLoadFile:
         		dec 	dx
         		jnz 	.EntryLoop
 
-		; Dont loop if esi is above 0xFFFFFFFF
+		; Dont loop if esi is 0xFFFFFFFF
 		pop 	esi
 		cmp 	esi, 0xFFFFFFFF
 		jne		.cLoop
@@ -331,6 +356,7 @@ MfsLoadFile:
 SetupMfs:
 	; Save State
 	pushad
+	xchg bx, bx
 
 	; Save data
 	mov 	byte [bMfsDriveNumber], ah
@@ -349,45 +375,7 @@ SetupMfs:
 	xor 	ebx, ebx
 	xor		ecx, ecx
 
-	; Buckets = TotalSectors / BucketSize
-	mov 	eax, dword [MfsBootSector + MfsBootSectorStruct.TotalSectors]
-	mov		edx, dword [MfsBootSector + MfsBootSectorStruct.TotalSectors + 4]
-	mov 	cx, word [MfsBootSector + MfsBootSectorStruct.SectorsPerBucket]
-	call	Div64
-	mov 	dword [qBucketCount], eax
-	mov 	dword [qBucketCount + 4], edx
-	
-	; BucketMapSize = Buckets * 4;
-	mov		esi, eax
-	mov		ecx, edx
-	mov		eax, 4
-	call	Mul64
-
-	; BucketMapSector = (TotalSectors - ((BucketMapSize / BytesPerSector) + 1))
-	xor		ecx, ecx
-	mov		cx, word [MfsBootSector + MfsBootSectorStruct.BytesPerSector]
-	call	Div64
-	mov		ebx, 0x1
-	xor		ecx, ecx
-
-	; addition
-	add		eax, ebx
-	adc		edx, ecx
-
-	mov		ebx, eax
-	mov		ecx, edx
-	mov		eax, dword [MfsBootSector + MfsBootSectorStruct.TotalSectors]
-	mov		edx, dword [MfsBootSector + MfsBootSectorStruct.TotalSectors + 4]
-
-	; subtract
-	sub		eax, ebx
-	sbb		edx, ecx
-
-	; Save
-	mov 	dword [qBucketMapSector], eax
-	mov 	dword [qBucketMapSector + 4], edx
-
-	; Now, get root bucket
+	; Get master bucket
 	mov		eax, dword [MfsBootSector + MfsBootSectorStruct.MasterBucketSector]
 	mov		esi, dword [MfsBootSector + MfsBootSectorStruct.MasterBucketSector + 4]
 	mov		ecx, 1
@@ -400,6 +388,11 @@ SetupMfs:
 	mov		ebx, 12
 	mov		ecx, [eax + ebx]
 	mov		dword [dRootBucket], ecx
+	mov 	ebx, 24
+	mov 	ecx, [eax + ebx]
+	mov 	dword [qBucketMapSector], ecx
+	mov 	ecx, [eax + ebx + 4]
+	mov 	dword [qBucketMapSector + 4], ecx
 
 	; Done
 	popad
@@ -473,10 +466,10 @@ Mul64:
 bMfsDriveNumber					db 		0
 bMfsEndOfString					db		0
 qBucketMapSector				dq 		0
-qBucketCount					dq 		0
 dRootBucket						dd		0
 wMfsTemporary0					dw 		0
 wMfsTemporary1					dd 		0
+dMfsTemporary2					dd		0
 dMFSLoadFileFName				dd 		0
 dMFSLoadFileFSize				dd 		0
 wMFSLoadFileFSegment 			dw 		0
